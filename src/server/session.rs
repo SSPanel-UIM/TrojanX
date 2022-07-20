@@ -107,6 +107,8 @@ where
     where
         IO: AsyncRead + AsyncWrite + Unpin,
     {
+        const PAYLOAD_LEN: usize = 8192;
+
         enum SessionStatus {
             Recv,
             UdpSend,
@@ -115,6 +117,7 @@ where
         }
 
         struct SessionInner<'a, C, IO> {
+            read_buf: [u8; PAYLOAD_LEN],
             status: SessionStatus,
             buf: UdpPacketBuf,
             ctrl: C,
@@ -125,7 +128,7 @@ where
 
         use SessionStatus::*;
 
-        impl<'a, C, IO> Future for SessionInner<'a, C, IO>
+        impl<C, IO> Future for SessionInner<'_, C, IO>
         where
             C: TrafficControl + Unpin,
             IO: AsyncRead + AsyncWrite + Unpin,
@@ -134,13 +137,13 @@ where
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 let mut this = self.get_mut();
-                ready!(this.ctrl.poll_pause(cx));
 
                 loop {
                     match &this.status {
                         Recv => {
-                            let mut buf = [0; 8192];
-                            let mut buf = ReadBuf::new(&mut buf);
+                            ready!(this.ctrl.poll_pause(cx));
+
+                            let mut buf = ReadBuf::new(&mut this.read_buf);
                             if Pin::new(&mut this.stream)
                                 .poll_read(cx, &mut buf)?
                                 .is_ready()
@@ -164,7 +167,7 @@ where
                         }
                         UdpSend => match this.buf.read() {
                             Some(p) => {
-                                if p.payload().len() <= 8192 {
+                                if p.payload().len() <= PAYLOAD_LEN {
                                     let n = ready!(this.socket.poll_send(cx, p.payload()))?;
                                     this.ctrl.consume_tx(n);
                                 }
@@ -193,6 +196,7 @@ where
         };
 
         SessionInner {
+            read_buf: [0; PAYLOAD_LEN],
             status,
             buf: self.buf,
             ctrl: self.ctrl,
