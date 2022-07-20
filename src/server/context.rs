@@ -7,14 +7,14 @@
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll};
 
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 
 use crate::proto::ProtocolError;
-use crate::utils::ProxyProtocolV2;
+use crate::utils::{ProxyProtocolV2, ready};
 
 pub enum RequestError {
     Reject,

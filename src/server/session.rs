@@ -4,15 +4,16 @@
 //
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
-use std::future::{poll_fn, Future};
+use std::future::Future;
 use std::io;
 use std::pin::Pin;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll};
 
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpStream, UdpSocket};
 
 use crate::proto::{Address, Command, RequestRef, UdpPacketBuf, UdpPacketRef};
+use crate::utils::{ready, poll_fn};
 
 use super::{StreamWrapper, TrafficControl};
 

@@ -4,8 +4,6 @@
 // 
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
-#![feature(ready_macro, future_poll_fn)]
-
 //! Trojan
 pub mod proto;
 pub mod utils;

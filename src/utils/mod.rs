@@ -7,6 +7,9 @@
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 
 pub mod limiter;
+mod unstable;
+
+pub(crate) use unstable::*;
 
 /// PROXY Protocol V2
 ///
