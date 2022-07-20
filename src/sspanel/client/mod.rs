@@ -33,7 +33,7 @@ pub struct Client {
 impl Client {
     #[inline]
     pub fn new(server: Arc<ServerContext>) -> Self {
-        let inner = reqwest::ClientBuilder::new().user_agent("trojan/0.1.0")
+        let inner = reqwest::ClientBuilder::new().user_agent("trojan/0.0.1")
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(10))
             .build()
