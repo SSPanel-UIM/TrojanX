@@ -154,8 +154,8 @@ impl Client {
     pub async fn server_stat(&self) -> Result<(), reqwest::Error> {
         #[derive(serde::Serialize)]
         struct Data {
-            uptime: i64,
-            load: f64
+            uptime: isize,
+            load: f32
         }
         let url = self.build_url(format!("/nodes/{}/info", self.id));
 
@@ -163,7 +163,7 @@ impl Client {
             let mut info = std::mem::MaybeUninit::uninit();
             libc::sysinfo(info.as_mut_ptr());
             let info = info.assume_init();
-            (info.loads[0] as f64 / (1 << libc::SI_LOAD_SHIFT) as f64, info.uptime)
+            (info.loads[0] as f32 / (1 << libc::SI_LOAD_SHIFT) as f32, info.uptime as isize)
         };
 
         self.inner.post(url).json(&Data { uptime, load }).send().await?;
