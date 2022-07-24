@@ -76,9 +76,9 @@ where
     {
         if !self.payload.is_empty() {
             let _ = self.socket.write(self.payload).await?;
+            self.ctrl.consume_tx(self.payload.len());
+            poll_fn(|cx| self.ctrl.poll_pause(cx)).await;
         }
-        self.ctrl.consume_tx(self.payload.len());
-        poll_fn(|cx| self.ctrl.poll_pause(cx)).await;
         let mut stream = StreamWrapper::new(stream, self.ctrl);
         tokio::io::copy_bidirectional(&mut stream, &mut self.socket).await?;
         Ok(())
