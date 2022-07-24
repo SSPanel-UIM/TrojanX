@@ -2,6 +2,9 @@
 
 A Trojan-based proxy implementation.
 
+[![Check](https://github.com/sspanel-uim/TrojanX/actions/workflows/check.yml/badge.svg)](https://github.com/sspanel-uim/TrojanX/actions/workflows/check.yml)
+[![Build](https://github.com/sspanel-uim/TrojanX/actions/workflows/build-release.yml/badge.svg)](https://github.com/sspanel-uim/TrojanX/actions/workflows/build-release.yml)
+
 ## Attention
 
 ### Early Version
