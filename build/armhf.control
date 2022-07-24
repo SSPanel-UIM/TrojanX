@@ -1,0 +1,6 @@
+Package: trojan-server
+Version: 0.0.1
+Architecture: armhf
+Maintainer: SSPanel-UIM Team <package@sspanel.org>
+Homepage: https://github.com/sspanel-uim/TrojanX
+Description: TrojanX Server for SSPanel-UIM.
