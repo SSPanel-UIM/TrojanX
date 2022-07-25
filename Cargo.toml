@@ -20,17 +20,17 @@ reqwest = { version = "0.11.11", default-features = false, features = ["json", "
 form_urlencoded = { version = "1.0", optional = true }
 rustls-native-certs = { version = "0.6.2", optional =  true }
 
-[target.'cfg(linux)'.dependencies]
+[target.'cfg(any(target_os = "linux"))'.dependencies]
 libc = { version = "0.2", optional = true }
 
 [features]
 trojan = [
-    "dep:rustls-native-certs"
+    "rustls-native-certs"
 ]
 sspanel = [
-    "dep:libc",
-    "dep:reqwest",
-    "dep:form_urlencoded",
+    "libc",
+    "reqwest",
+    "form_urlencoded",
     "tokio/time",
     "tokio/signal",
     "tokio/rt-multi-thread"
