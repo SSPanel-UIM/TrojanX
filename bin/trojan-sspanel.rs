@@ -12,7 +12,7 @@ use std::time::Duration;
 use std::net::SocketAddr;
 
 use log::LevelFilter;
-use trojan_x::server::{Fallback, TlsConfig};
+use trojan_x::{Fallback, TlsConfig};
 use trojan_x::sspanel::client::Client;
 use trojan_x::sspanel::server::{Server, ServerContext};
 
@@ -71,7 +71,7 @@ impl Config {
         log::set_max_level(self.log_level);
 
         // tls context
-        let ssl_ctx = self.tls.build()?;
+        let ssl_ctx = self.tls.build_server()?;
 
         // all done, start tokio runtime
         let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;

@@ -21,7 +21,7 @@ use tokio_rustls::server::TlsStream;
 
 use super::super::client::{IpData, UpdateData};
 use crate::proto::Password;
-use crate::server::{Fallback, TrafficControl};
+use crate::session::{Fallback, TrafficControl};
 use crate::sspanel::client::context::UserRaw;
 use crate::utils::limiter::Limiter;
 

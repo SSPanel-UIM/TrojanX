@@ -13,19 +13,7 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 
-use crate::proto::ProtocolError;
 use crate::utils::{ProxyProtocolV2, ready};
-
-pub enum RequestError {
-    Reject,
-    Fallback,
-}
-
-impl From<ProtocolError> for RequestError {
-    fn from(_: ProtocolError) -> Self {
-        Self::Fallback
-    }
-}
 
 /// Fallback Policy
 #[derive(Debug, serde::Deserialize)]
@@ -114,22 +102,22 @@ where
     }
 }
 
-pub struct StreamWrapper<'a, IO, C> {
-    stream: &'a mut IO,
+pub struct StreamWrapper<IO, C> {
+    stream: IO,
     ctrl: C,
 }
 
-impl<'a, IO, C> StreamWrapper<'a, IO, C>
+impl<IO, C> StreamWrapper<IO, C>
 where
     IO: AsyncRead + AsyncWrite + Unpin,
     C: TrafficControl + Unpin,
 {
-    pub fn new(stream: &'a mut IO, ctrl: C) -> Self {
+    pub fn new(stream: IO, ctrl: C) -> Self {
         Self { stream, ctrl }
     }
 }
 
-impl<'a, IO, C> AsyncWrite for StreamWrapper<'a, IO, C>
+impl<IO, C> AsyncWrite for StreamWrapper<IO, C>
 where
     IO: AsyncRead + AsyncWrite + Unpin,
     C: TrafficControl + Unpin,
@@ -178,7 +166,7 @@ where
     }
 }
 
-impl<'a, IO, C> AsyncRead for StreamWrapper<'a, IO, C>
+impl<IO, C> AsyncRead for StreamWrapper<IO, C>
 where
     IO: AsyncRead + AsyncWrite + Unpin,
     C: TrafficControl + Unpin,

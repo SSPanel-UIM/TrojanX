@@ -1,14 +1,3 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2022 irohaede <irohaede@proton.me>
-
-//! Trojan Server
-
-mod context;
-mod session;
-
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufReader};
@@ -22,17 +11,16 @@ use tokio_rustls::rustls::server::{
 use tokio_rustls::rustls::sign::{any_supported_type, CertifiedKey};
 use tokio_rustls::rustls::{Certificate, PrivateKey, ServerConfig};
 
-pub use context::*;
-pub use session::*;
-
 #[derive(serde::Deserialize)]
 pub struct TlsConfig {
+    // server
+    #[serde(default)]
     servers: HashMap<String, Server>,
+    #[serde(default)]
+    prefer_server_cipher: bool,
 
     #[serde(default)]
     max_early_data: u32,
-    #[serde(default)]
-    prefer_server_cipher: bool,
     #[serde(default)]
     session_cache_size: usize,
     #[serde(default)]
@@ -42,7 +30,7 @@ pub struct TlsConfig {
 }
 
 impl TlsConfig {
-    pub fn build(self) -> io::Result<Arc<ServerConfig>> {
+    pub fn build_server(self) -> io::Result<Arc<ServerConfig>> {
         let cert_resolver = Arc::new(CertResolver::new(self.servers)?);
 
         let mut ctx = ServerConfig::builder()
@@ -62,10 +50,37 @@ impl TlsConfig {
 
         Ok(Arc::new(ctx))
     }
+
+    #[cfg(feature = "trojan")]
+    pub fn build_client(self) -> io::Result<Arc<tokio_rustls::rustls::ClientConfig>> {
+        use tokio_rustls::rustls::client::{ClientSessionMemoryCache, NoClientSessionStorage};
+        use tokio_rustls::rustls::RootCertStore;
+
+        let mut root_certs = RootCertStore::empty();
+        for cert in rustls_native_certs::load_native_certs()? {
+            root_certs
+                .add(&tokio_rustls::rustls::Certificate(cert.0))
+                .unwrap();
+        }
+        let mut ctx = tokio_rustls::rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_certs)
+            .with_no_client_auth();
+        ctx.alpn_protocols = self.alpn.into_iter().map(String::into_bytes).collect();
+        ctx.max_fragment_size = self.max_fragment_size;
+        ctx.enable_early_data = self.max_early_data > 0;
+        ctx.session_storage = if self.session_cache_size > 0 {
+            ClientSessionMemoryCache::new(self.session_cache_size)
+        } else {
+            Arc::new(NoClientSessionStorage {})
+        };
+
+        Ok(Arc::new(ctx))
+    }
 }
 
 #[derive(serde::Deserialize)]
-pub struct Server {
+struct Server {
     cert_chain: PathBuf,
     priv_key: PathBuf,
 }

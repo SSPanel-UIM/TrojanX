@@ -15,7 +15,7 @@ use tokio_rustls::rustls::server::Acceptor;
 use tokio_rustls::LazyConfigAcceptor;
 
 use crate::proto::RequestRef;
-use crate::server::RelaySession;
+use crate::session::ServerRelaySession;
 
 pub mod context;
 
@@ -98,7 +98,7 @@ impl ServerSession {
             };
 
             let mut ctx = user.into_session();
-            let session = RelaySession::new(&req, &mut ctx).await?;
+            let session = ServerRelaySession::new(&req, &mut ctx).await?;
             let _ = session.run(stream).await;
             self.log_end(ctx, req);
         } else {
@@ -115,7 +115,7 @@ impl ServerSession {
             };
 
             let mut ctx = user.into_session();
-            let (session, stream) = tokio::try_join!(RelaySession::new(&req, &mut ctx), accept)?;
+            let (session, stream) = tokio::try_join!(ServerRelaySession::new(&req, &mut ctx), accept)?;
             let _ = session.run(stream).await;
             self.log_end(ctx, req);
         }
