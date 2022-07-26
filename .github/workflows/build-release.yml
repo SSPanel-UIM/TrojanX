@@ -53,9 +53,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.host_os }}" == "ubuntu-latest" ]]; then
-            cross build --release --target ${{ matrix.target }}
+            cross build --all-features --release --target ${{ matrix.target }}
           else
-            cargo build --release --target ${{ matrix.target }}
+            cargo build --all-features --release --target ${{ matrix.target }}
           fi
           mv target/${{ matrix.target }}/release/trojan-sspanel release/trojan-sspanel-${{ matrix.target }}
 
