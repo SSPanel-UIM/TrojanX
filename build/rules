@@ -1,2 +1,2 @@
 %:
-    dh $@ --with=cli --with=systemd
+    dh $@ 
