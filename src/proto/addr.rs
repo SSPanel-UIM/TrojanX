@@ -6,7 +6,6 @@
 
 use std::fmt::{self, Display, Formatter};
 use std::io;
-use std::marker::PhantomData;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 
 use tokio::net::{TcpStream, UdpSocket};
@@ -36,133 +35,58 @@ use super::{AssembleError, ProtocolError};
 /// ### IP V6 address: `0x04`
 ///
 /// the address is a version-6 IP address, with a length of 16 octets.
-#[derive(Clone, Copy)]
-pub struct Address<'a> {
-    pub(super) inner: AddressInner,
-    _phantom: PhantomData<&'a [u8]>,
+#[derive(Clone)]
+pub enum Address {
+    IP(SocketAddr),
+    Name((String, u16)),
 }
 
-impl Address<'_> {
-    /// Parse Socks5-like Address field
-    #[inline]
-    pub fn from_bytes(bytes: &[u8]) -> Result<Address<'_>, ProtocolError> {
-        Self::from_assemble_bytes(bytes).map_err(|_| ProtocolError)
-    }
-
-    /// Parse Socks5-like Address field from assemble bytes
-    #[inline]
-    pub fn from_assemble_bytes(bytes: &[u8]) -> Result<Address<'_>, AssembleError> {
-        let inner = AddressInner::from_assemble_bytes(bytes)?;
-        Ok(Address {
-            inner,
-            _phantom: PhantomData,
-        })
-    }
-
-    /// Build Address as bytes
-    #[inline]
-    pub fn as_bytes(&self) -> Vec<u8> {
-        unsafe { self.inner.as_bytes() }
-    }
-
-    /// Extend address bytes to `buf`.
-    #[inline]
-    pub fn extend_bytes(&self, buf: &mut Vec<u8>) {
-        unsafe { self.inner.extend_bytes(buf) }
-    }
-
-    /// The size of address field takes in bytes.
-    #[inline]
-    pub fn size(&self) -> usize {
-        unsafe { self.inner.size() }
-    }
-
-    /// Convert self into [`AddressEnum`] for future usage or extra value.
-    #[inline]
-    pub fn into_enum(self) -> AddressEnum<'static> {
-        match self.inner {
-            AddressInner::IP(a) => AddressEnum::IP(a),
-            AddressInner::Name((n, p)) => AddressEnum::Name((unsafe { &*n }, p)),
+impl Address {
+    pub fn as_ref(&self) -> AddressRef<'_> {
+        match self {
+            Address::IP(addr) => AddressRef::IP(*addr),
+            Address::Name((name, port)) => AddressRef::Name((name, *port)),
         }
     }
 }
 
-impl Display for Address<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self.inner {
-            AddressInner::IP(a) => a.fmt(f),
-            AddressInner::Name((n, p)) => write!(f, "{}:{}", unsafe { &*n }, p),
-        }
-    }
-}
-
-impl From<SocketAddr> for Address<'_> {
+impl From<SocketAddr> for Address {
     fn from(addr: SocketAddr) -> Self {
-        let inner = AddressInner::IP(addr);
-        Address {
-            inner,
-            _phantom: PhantomData,
-        }
+        Address::IP(addr)
     }
 }
 
-impl From<(&str, u16)> for Address<'_> {
-    fn from((name, port): (&str, u16)) -> Self {
-        let inner = AddressInner::Name((name as *const str, port));
-        Address {
-            inner,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-/// Enumerate Address
-pub enum AddressEnum<'a> {
+#[derive(Clone, Copy)]
+pub enum AddressRef<'a> {
     IP(SocketAddr),
     Name((&'a str, u16)),
 }
 
-impl AddressEnum<'_> {
-    /// Open a TCP Streamt to the specified address.
+impl AddressRef<'_> {
     #[inline]
-    pub async fn open_tcp(&self) -> io::Result<TcpStream> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<AddressRef<'_>, ProtocolError> {
+        Self::from_assemble_bytes(bytes).map_err(|_| ProtocolError)
+    }
+
+    #[inline]
+    pub fn size(&self) -> usize {
         match self {
-            AddressEnum::IP(a) => TcpStream::connect(a).await,
-            AddressEnum::Name(a) => TcpStream::connect(a).await,
+            AddressRef::IP(SocketAddr::V4(_)) => 7,
+            AddressRef::IP(SocketAddr::V6(_)) => 19,
+            AddressRef::Name((n, _)) => n.len() + 4,
         }
     }
 
-    /// Open an connected UDP Socket to the specified address.
     #[inline]
-    pub async fn open_udp(&self) -> io::Result<UdpSocket> {
-        use std::net::{self, IpAddr};
-
-        #[cfg(any(target_os = "linux"))]
-        let bind = IpAddr::V6(net::Ipv6Addr::UNSPECIFIED);
-        #[cfg(any(not(target_os = "linux")))]
-        let bind = match self {
-            AddressEnum::IP(SocketAddr::V6(_)) => IpAddr::V6(net::Ipv6Addr::UNSPECIFIED),
-            _ => IpAddr::V4(net::Ipv4Addr::UNSPECIFIED),
-        };
-
-        let socket = UdpSocket::bind((bind, 0)).await?;
+    pub fn to_owned(self) -> Address {
         match self {
-            AddressEnum::IP(a) => socket.connect(a).await?,
-            AddressEnum::Name(a) => socket.connect(a).await?,
+            AddressRef::IP(addr) => Address::IP(addr),
+            AddressRef::Name((name, port)) => Address::Name((name.to_owned(), port)),
         }
-        Ok(socket)
     }
-}
 
-#[derive(Clone, Copy)]
-pub(super) enum AddressInner {
-    IP(SocketAddr),
-    Name((*const str, u16)),
-}
-
-impl AddressInner {
     #[inline]
-    pub fn from_assemble_bytes(bytes: &[u8]) -> Result<Self, AssembleError> {
+    pub fn from_assemble_bytes(bytes: &[u8]) -> Result<AddressRef<'_>, AssembleError> {
         let kind = bytes.first().ok_or(AssembleError::NotReady)?;
 
         match kind {
@@ -175,9 +99,7 @@ impl AddressInner {
                 let addr = <[u8; 4]>::try_from(&slice[..4]).unwrap();
                 let port = u16::from_be_bytes([slice[4], slice[5]]);
 
-                Ok(AddressInner::IP(
-                    SocketAddrV4::new(addr.into(), port).into(),
-                ))
+                Ok(AddressRef::IP(SocketAddrV4::new(addr.into(), port).into()))
             }
             0x03 => {
                 // Domain Name
@@ -194,7 +116,7 @@ impl AddressInner {
                     std::str::from_utf8(&slice[..name_len]).map_err(|_| AssembleError::Protocol)?;
                 let port = u16::from_be_bytes([slice[name_len], slice[name_len + 1]]);
 
-                Ok(AddressInner::Name((name as *const _, port)))
+                Ok(AddressRef::Name((name, port)))
             }
             0x04 => {
                 // IPv6
@@ -205,7 +127,7 @@ impl AddressInner {
                 let addr = <[u8; 16]>::try_from(&bytes[..16]).unwrap();
                 let port = u16::from_be_bytes([bytes[16], bytes[17]]);
 
-                Ok(AddressInner::IP(
+                Ok(AddressRef::IP(
                     SocketAddrV6::new(addr.into(), port, 0, 0).into(),
                 ))
             }
@@ -214,37 +136,19 @@ impl AddressInner {
     }
 
     #[inline]
-    pub unsafe fn as_ref(&self) -> Address<'_> {
-        Address {
-            inner: *self,
-            _phantom: PhantomData,
-        }
-    }
-
-    #[inline]
-    pub unsafe fn size(&self) -> usize {
+    pub fn extend_bytes(&self, buf: &mut Vec<u8>) {
         match self {
-            AddressInner::IP(SocketAddr::V4(_)) => 7,
-            AddressInner::IP(SocketAddr::V6(_)) => 19,
-            AddressInner::Name((n, _)) => (**n).len() + 4,
-        }
-    }
-
-    #[inline]
-    pub unsafe fn extend_bytes(&self, buf: &mut Vec<u8>) {
-        match self {
-            AddressInner::IP(SocketAddr::V4(a)) => {
+            AddressRef::IP(SocketAddr::V4(a)) => {
                 buf.push(0x01);
                 buf.extend(a.ip().octets());
                 buf.extend(a.port().to_be_bytes());
             }
-            AddressInner::IP(SocketAddr::V6(a)) => {
+            AddressRef::IP(SocketAddr::V6(a)) => {
                 buf.push(0x04);
                 buf.extend(a.ip().octets());
                 buf.extend(a.port().to_be_bytes());
             }
-            AddressInner::Name((n, p)) => {
-                let n = &**n;
+            AddressRef::Name((n, p)) => {
                 buf.push(0x03);
                 buf.push(n.len() as u8);
                 buf.extend(n.as_bytes());
@@ -253,15 +157,42 @@ impl AddressInner {
         }
     }
 
+    /// Open a TCP Streamt to the specified address.
     #[inline]
-    pub unsafe fn as_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
-        buf.reserve(self.size());
-        self.extend_bytes(&mut buf);
-        buf
+    pub async fn open_tcp(&self) -> io::Result<TcpStream> {
+        match self {
+            AddressRef::IP(a) => TcpStream::connect(a).await,
+            AddressRef::Name(a) => TcpStream::connect(a).await,
+        }
+    }
+
+    /// Open an connected UDP Socket to the specified address.
+    #[inline]
+    pub async fn open_udp(&self) -> io::Result<UdpSocket> {
+        use std::net::{self, IpAddr};
+
+        #[cfg(any(target_os = "linux"))]
+        let bind = IpAddr::V6(net::Ipv6Addr::UNSPECIFIED);
+        #[cfg(any(not(target_os = "linux")))]
+        let bind = match self {
+            AddressRef::IP(SocketAddr::V6(_)) => IpAddr::V6(net::Ipv6Addr::UNSPECIFIED),
+            _ => IpAddr::V4(net::Ipv4Addr::UNSPECIFIED),
+        };
+
+        let socket = UdpSocket::bind((bind, 0)).await?;
+        match self {
+            AddressRef::IP(a) => socket.connect(a).await?,
+            AddressRef::Name(a) => socket.connect(a).await?,
+        }
+        Ok(socket)
     }
 }
 
-unsafe impl Send for AddressInner {}
-
-unsafe impl Sync for AddressInner {}
+impl Display for AddressRef<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            AddressRef::IP(a) => a.fmt(f),
+            AddressRef::Name((n, p)) => write!(f, "{}:{}", n, p),
+        }
+    }
+}

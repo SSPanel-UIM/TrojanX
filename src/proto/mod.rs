@@ -194,7 +194,7 @@ impl Command {
     ///
     /// If `byte` is unknown Command.
     #[inline]
-    pub fn from_byte(byte: &u8) -> Result<Self, ProtocolError> {
+    pub fn from_byte(byte: u8) -> Result<Self, ProtocolError> {
         match byte {
             0x01 => Ok(Command::Connect),
             0x03 => Ok(Command::UdpAssociate),
@@ -223,7 +223,7 @@ impl Display for Command {
 pub struct RequestRef<'a> {
     pub pwd: Password,
     pub cmd: Command,
-    pub addr: Address<'a>,
+    pub addr: AddressRef<'a>,
     pub payload: &'a [u8],
 }
 
@@ -246,10 +246,10 @@ impl<'a> RequestRef<'a> {
             if &slice[56..58] != CRLF {
                 return Err(ProtocolError);
             }
-            let cmd = Command::from_byte(&slice[58])?;
+            let cmd = Command::from_byte(slice[58])?;
             (pwd, cmd)
         };
-        let addr = Address::from_bytes(&bytes[59..])?;
+        let addr = AddressRef::from_bytes(&bytes[59..])?;
 
         let payload = {
             let offset = 59 + addr.size() + 2;

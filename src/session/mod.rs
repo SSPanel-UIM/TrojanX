@@ -12,72 +12,70 @@ use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpStream, UdpSocket};
 
-use crate::proto::{Address, Command, RequestRef, UdpPacketBuf, UdpPacketRef};
+use crate::proto::{Command, UdpPacketBuf, UdpPacketRef, Address, AddressRef};
 use crate::utils::{poll_fn, ready};
 
 mod context;
 pub use context::*;
 
-pub enum ServerRelaySession<'a, C> {
-    Udp(UdpSession<'a, C>),
-    Tcp(TcpSession<'a, C>),
+pub enum ServerRelaySession<C> {
+    Udp(UdpSession<C>),
+    Tcp(TcpSession<C>),
 }
 
-impl<'a, C> ServerRelaySession<'a, C>
+impl<C> ServerRelaySession<C>
 where
     C: TrafficControl + Unpin,
 {
     /// Init a session without performing any IO
-    pub async fn new(req: &'a RequestRef<'a>, ctrl: C) -> io::Result<ServerRelaySession<'a, C>> {
-        match req.cmd {
+    pub async fn new(cmd: Command, addr: &AddressRef<'_>, ctrl: C) -> io::Result<ServerRelaySession<C>> {
+        match cmd {
             Command::Connect => {
-                let session = TcpSession::new_accept(req, ctrl).await?;
+                let session = TcpSession::new_accept(addr, ctrl).await?;
                 Ok(ServerRelaySession::Tcp(session))
             }
             Command::UdpAssociate => {
-                let session = UdpSession::new(req, ctrl).await?;
+                let session = UdpSession::new(addr, ctrl).await?;
                 Ok(ServerRelaySession::Udp(session))
             }
         }
     }
 
-    pub async fn run<S>(self, stream: S) -> io::Result<()>
+    pub async fn run<S>(self, stream: S, payload: &[u8]) -> io::Result<()>
     where
         S: AsyncRead + AsyncWrite + Unpin + 'static,
     {
         match self {
-            Self::Tcp(s) => s.run(stream).await,
-            Self::Udp(s) => s.run(stream).await,
+            Self::Tcp(s) => s.run(stream, payload).await,
+            Self::Udp(s) => s.run(stream, payload).await,
         }
     }
 }
 
-pub struct TcpSession<'a, C> {
+pub struct TcpSession<C> {
     ctrl: C,
     socket: TcpStream,
-    payload: &'a [u8],
 }
 
-impl<'a, C> TcpSession<'a, C>
+impl<C> TcpSession<C>
 where
     C: TrafficControl + Unpin,
 {
-    pub async fn new_accept(req: &RequestRef<'a>, ctrl: C) -> io::Result<TcpSession<'a, C>> {
-        let socket = req.addr.into_enum().open_tcp().await?;
+    pub async fn new_accept(addr: &AddressRef<'_>, ctrl: C) -> io::Result<TcpSession<C>> {
+        let socket = addr.open_tcp().await?;
         Ok(TcpSession {
             ctrl,
             socket,
-            payload: req.payload,
         })
     }
 
-    pub async fn run<S>(mut self, stream: S) -> io::Result<()>
+    pub async fn run<S>(mut self, stream: S, payload: &[u8]) -> io::Result<()>
     where
         S: AsyncRead + AsyncWrite + Unpin,
     {
-        if !self.payload.is_empty() {
-            let _ = self.socket.write(self.payload).await?;
-            self.ctrl.consume_tx(self.payload.len());
+        if !payload.is_empty() {
+            let _ = self.socket.write(payload).await?;
+            self.ctrl.consume_tx(payload.len());
             poll_fn(|cx| self.ctrl.poll_pause(cx)).await;
         }
         Self::wrap_copy(stream, self.socket, self.ctrl).await
@@ -95,46 +93,47 @@ where
 
 const PAYLOAD_LEN: usize = 8192;
 
-pub struct UdpSession<'a, C> {
+pub struct UdpSession<C> {
     ctrl: C,
     socket: UdpSocket,
-    dest: Address<'a>,
+    dest: Address,
     buf: UdpPacketBuf,
 }
 
-impl<'a, C> UdpSession<'a, C>
+impl<C> UdpSession<C>
 where
     C: TrafficControl + Unpin,
 {
-    pub async fn new(req: &'a RequestRef<'a>, ctrl: C) -> io::Result<UdpSession<'a, C>> {
-        let mut buf = UdpPacketBuf::init(req.payload);
-        buf.process_new_packet()?;
+    pub async fn new(addr: &AddressRef<'_>, ctrl: C) -> io::Result<UdpSession<C>> {
+        let buf = UdpPacketBuf::new();
         Ok(UdpSession {
             ctrl,
-            socket: req.addr.into_enum().open_udp().await?,
-            dest: req.addr,
+            socket: addr.open_udp().await?,
+            dest: (*addr).to_owned(),
             buf,
         })
     }
 
-    pub fn run<IO>(self, stream: IO) -> UdpSessionFut<'a, C, IO>
+    pub async fn run<IO>(mut self, stream: IO, payload: &[u8]) -> io::Result<()>
     where
         IO: AsyncRead + AsyncWrite + Unpin,
     {
+        self.buf.write(payload);
+        self.buf.process_new_packet()?;
         let status = match self.buf.read() {
             Some(_) => UdpSessionStatus::UdpSend,
             None => UdpSessionStatus::Recv,
         };
 
         UdpSessionFut {
-            read_buf: [0; PAYLOAD_LEN],
+            read_buf: vec![0; PAYLOAD_LEN],
             status,
             buf: self.buf,
             ctrl: self.ctrl,
             socket: self.socket,
             dest: self.dest,
             stream,
-        }
+        }.await
     }
 }
 
@@ -145,17 +144,17 @@ enum UdpSessionStatus {
     Shutdown,
 }
 
-pub struct UdpSessionFut<'a, C, IO> {
-    read_buf: [u8; PAYLOAD_LEN],
+struct UdpSessionFut<C, IO> {
+    read_buf: Vec<u8>,
     status: UdpSessionStatus,
     buf: UdpPacketBuf,
     ctrl: C,
     socket: UdpSocket,
-    dest: Address<'a>,
+    dest: Address,
     stream: IO,
 }
 
-impl<C, IO> Future for UdpSessionFut<'_, C, IO>
+impl<C, IO> Future for UdpSessionFut<C, IO>
 where
     C: TrafficControl + Unpin,
     IO: AsyncRead + AsyncWrite + Unpin,
@@ -188,7 +187,7 @@ where
                         continue;
                     }
                     if this.socket.poll_recv(cx, &mut buf)?.is_ready() {
-                        let bytes = UdpPacketRef::new(this.dest, buf.filled()).as_bytes();
+                        let bytes = UdpPacketRef::new(this.dest.as_ref(), buf.filled()).as_bytes();
                         this.status = StreamSend(bytes);
                         continue;
                     }
@@ -196,8 +195,8 @@ where
                 }
                 UdpSend => match this.buf.read() {
                     Some(p) => {
-                        if p.payload().len() <= PAYLOAD_LEN {
-                            let n = ready!(this.socket.poll_send(cx, p.payload()))?;
+                        if p.payload.len() <= PAYLOAD_LEN {
+                            let n = ready!(this.socket.poll_send(cx, p.payload))?;
                             this.ctrl.consume_tx(n);
                         }
                         this.buf.process_new_packet()?;

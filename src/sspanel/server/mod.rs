@@ -1,7 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-// 
+//
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
 use std::io::{self, Read};
@@ -13,6 +13,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::time::Instant;
 use tokio_rustls::rustls::server::Acceptor;
 use tokio_rustls::LazyConfigAcceptor;
+use tokio_rustls::server::TlsStream;
 
 use crate::proto::RequestRef;
 use crate::session::ServerRelaySession;
@@ -67,62 +68,59 @@ impl ServerSession {
         let acceptor = LazyConfigAcceptor::new(Acceptor::new().unwrap(), stream);
         let handshake = acceptor.await?;
 
-        // try to read early data
-        let mut early_data = Vec::new();
+        let mut buf = Vec::with_capacity(1024);
         let accept = handshake.into_stream_with(self.ctx.tls.clone(), |c| {
             if c.process_new_packets().is_ok() {
                 if let Some(mut d) = c.early_data() {
-                    if let Ok(n) = d.read_to_end(&mut early_data) {
+                    if let Ok(n) = d.read_to_end(&mut buf) {
                         log::debug!("read {} bytes early data", n);
                     }
                 }
             }
         });
 
-        if early_data.is_empty() {
+        let req;
+        let mut ctx;
+        let (session, stream) = if buf.is_empty() {
             let mut stream = accept.await?;
 
-            // to read first data, a tiny buffer is enough
-            let mut buf = [0; 512];
-            let n = stream.read(&mut buf).await?;
-            let header = &buf[..n];
-
-            let (req, user) = match self.parse_verify(header) {
-                Ok(Some(x)) => x,
-                Ok(None) => return Ok(()),
-                Err(e) => {
-                    self.log_fallback(e);
-                    self.ctx.downgrade(&mut stream, header).await?;
-                    return Ok(());
+            stream.read_buf(&mut buf).await?;
+            match self.parse_verify(&buf) {
+                Ok(Some((r, u))) => {
+                    req = r;
+                    ctx = u.into_session();
                 }
+                Ok(None) => return Ok(()),
+                Err(e) => return self.fallback(e, stream, &buf).await
             };
 
-            let mut ctx = user.into_session();
-            let session = ServerRelaySession::new(&req, &mut ctx).await?;
-            let _ = session.run(stream).await;
-            self.log_end(ctx, req);
+            (ServerRelaySession::new(req.cmd, &req.addr, &mut ctx).await?, stream)
         } else {
             log::debug!("early data session from {}", self.src);
-            let (req, user) = match self.parse_verify(&early_data) {
-                Ok(Some(x)) => x,
+            match self.parse_verify(&buf) {
+                Ok(Some((r, u))) => {
+                    req = r;
+                    ctx = u.into_session();
+                }
                 Ok(None) => return Ok(()),
                 Err(e) => {
-                    self.log_fallback(e);
-                    let mut stream = accept.await?;
-                    self.ctx.downgrade(&mut stream, &early_data).await?;
-                    return Ok(());
+                    let stream = accept.await?;
+                    return self.fallback(e, stream, &buf).await;
                 }
             };
 
-            let mut ctx = user.into_session();
-            let (session, stream) = tokio::try_join!(ServerRelaySession::new(&req, &mut ctx), accept)?;
-            let _ = session.run(stream).await;
-            self.log_end(ctx, req);
-        }
+            tokio::try_join!(ServerRelaySession::new(req.cmd, &req.addr, &mut ctx), accept)?
+        };
+
+        let _ = session.run(stream, req.payload).await;
+        self.log_end(ctx, req);
         Ok(())
     }
 
-    fn parse_verify<'a>(&self, data: &'a [u8]) -> Result<Option<(RequestRef<'a>, Arc<UserContext>)>, &'static str> {
+    fn parse_verify<'a>(
+        &self,
+        data: &'a [u8],
+    ) -> Result<Option<(RequestRef<'a>, Arc<UserContext>)>, &'static str> {
         let req = RequestRef::from_bytes(data).map_err(|_| "failed to parse")?;
         let user = match self.ctx.verify(&self.src, &req.pwd) {
             Ok(u) => u,
@@ -152,7 +150,8 @@ impl ServerSession {
         );
     }
 
-    fn log_fallback(&self, err: &'static str) {
+    async fn fallback(&self, err: &str, mut src: TlsStream<TcpStream>, data: &[u8]) -> io::Result<()> {
         log::info!("fallback from {}: {}", self.src, err);
+        self.ctx.downgrade(&mut src, data).await
     }
 }
