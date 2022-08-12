@@ -14,8 +14,8 @@ use super::server::ServerContext;
 
 pub(crate) mod context;
 
-pub use context::{IpData, UpdateData};
-use context::{Request, UpdateResponse, UserFetchResponse, UserRaw};
+pub use context::{IpData, UpdateData, UserRaw};
+use context::{Request, UpdateResponse, UserFetchResponse};
 
 pub struct Client {
     pub id: usize,

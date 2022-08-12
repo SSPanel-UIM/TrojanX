@@ -19,11 +19,11 @@ use tokio::time::{self, Instant, Sleep};
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::server::TlsStream;
 
-use super::super::client::{IpData, UpdateData};
 use crate::proto::Password;
 use crate::session::{Fallback, TrafficControl};
-use crate::sspanel::client::context::UserRaw;
+use crate::sspanel::client::{IpData, UpdateData, UserRaw};
 use crate::utils::limiter::Limiter;
+use crate::utils::RawHasherBuilder;
 
 pub struct UserContext {
     pub id: usize,
@@ -76,7 +76,7 @@ pub struct ServerContext {
 
     pub(crate) tls: Arc<ServerConfig>,
 
-    pub(crate) users: RwLock<HashMap<Password, Arc<UserContext>>>,
+    pub(crate) users: RwLock<HashMap<Password, Arc<UserContext>, RawHasherBuilder>>,
 }
 
 impl ServerContext {
@@ -86,7 +86,7 @@ impl ServerContext {
             tls,
             alpn_fallback: HashMap::new(),
             fallback: Fallback::default(),
-            users: RwLock::new(HashMap::new()),
+            users: RwLock::new(HashMap::with_hasher(RawHasherBuilder)),
         }
     }
 
@@ -121,8 +121,7 @@ impl ServerContext {
         &self,
         stream: &mut TlsStream<TcpStream>,
         data: &[u8],
-    ) -> io::Result<()>
-    {
+    ) -> io::Result<()> {
         let mut fallback = &self.fallback;
         if let Some(alpn) = stream.get_ref().1.alpn_protocol() {
             // SAFETY: just to find in map

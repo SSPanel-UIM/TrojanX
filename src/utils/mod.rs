@@ -4,6 +4,7 @@
 //
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
+use std::hash::{BuildHasher, Hasher};
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 
 #[cfg(feature = "sspanel")]
@@ -75,5 +76,35 @@ impl ProxyProtocolV2 {
             }
         }
         bytes
+    }
+}
+
+pub struct RawHasherBuilder;
+
+impl BuildHasher for RawHasherBuilder {
+    type Hasher = RawHasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        RawHasher { raw: 0 }
+    }
+}
+
+/// A hasher wrapper specified to "hash" [`crate::proto::Password`].
+///
+/// Do not use it for others.
+pub struct RawHasher {
+    raw: u64,
+}
+
+impl Hasher for RawHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        // SAFETY: password has 28 bytes and we take its first 8 bytes(64 bit)
+        unsafe {
+            self.raw = u64::from_be_bytes(bytes.get_unchecked(..8).try_into().unwrap());
+        }
+    }
+
+    fn finish(&self) -> u64 {
+        self.raw
     }
 }
