@@ -5,6 +5,7 @@ Wants=network.target
 
 [Service]
 User=trojan
+Group=trojan
 Type=exec
 LimitNOFILE=65535
 ExecStart=/usr/bin/trojan-server /etc/trojan-server/sspanel.json

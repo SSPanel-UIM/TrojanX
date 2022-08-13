@@ -20,6 +20,14 @@ install -m 755 %{_builddir}/%{name}-%{version}/trojan-sspanel-x86_64-unknown-lin
 install -m 644 %{_builddir}/%{name}-%{version}/sspanel.json %{buildroot}%{_sysconfdir}/trojan-server
 install -m 644 %{_builddir}/%{name}-%{version}/trojan-server.service %{buildroot}%{_unitdir}
 
+%post
+/usr/sbin/groupadd trojan
+/usr/sbin/useradd -g trojan trojan
+
+%postun
+/usr/sbin/userdel -r trojan
+/usr/sbin/groupdel trojan
+
 %clean
 rm -rf %{buildroot}
 
