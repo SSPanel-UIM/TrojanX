@@ -1,7 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-// 
+//
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
 //! Trojan Protocol
@@ -75,6 +75,7 @@
 //! See [`RequestRef`] and [`UdpPacketRef`].
 
 use std::fmt::{self, Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::io;
 
 mod addr;
@@ -113,7 +114,7 @@ impl From<ProtocolError> for AssembleError {
 /// SHA224 password digest
 ///
 /// In Trojan Request, it's presented as hexadecimal with 56 bytes.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Eq)]
 pub struct Password {
     pub raw: [u8; 28],
 }
@@ -172,6 +173,18 @@ impl Display for Password {
         // SAFETY: hex is valid UTF-8
         let str = unsafe { std::str::from_utf8_unchecked(&hex) };
         f.write_str(str)
+    }
+}
+
+impl Hash for Password {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(&self.raw);
+    }
+}
+
+impl PartialEq for Password {
+    fn eq(&self, other: &Self) -> bool {
+        self.raw.eq(&other.raw)
     }
 }
 
