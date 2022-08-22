@@ -7,9 +7,6 @@
     "key": "example-key",
     "base_url": "https://example.com/mod_mu",
     "duration": 60,
-    "fallback": {
-        "reject"
-    },
     "alpn_fallback": {
         "h2": {
             "connect": "127.0.0.1:81"
