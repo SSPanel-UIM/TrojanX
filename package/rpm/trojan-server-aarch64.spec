@@ -15,26 +15,23 @@ A Trojan implementation from SSPanel-UIM.
 rm -rf %{buildroot}
 mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_sysconfdir}/trojan-server
-mkdir -p %{buildroot}%{_unitdir}
-install -m 755 %{_builddir}/%{name}-%{version}/trojan-sspanel-aarch64-unknown-linux-gnu %{buildroot}%{_bindir}/trojan-server
+mkdir -p %{buildroot}%{_sysconfdir}/systemd/system
+install -m 755 %{_builddir}/%{name}-%{version}/trojan-sspanel-x86_64-unknown-linux-gnu %{buildroot}%{_bindir}/trojan-server
 install -m 644 %{_builddir}/%{name}-%{version}/sspanel.json %{buildroot}%{_sysconfdir}/trojan-server
-install -m 644 %{_builddir}/%{name}-%{version}/trojan-server.service %{buildroot}%{_unitdir}
+install -m 644 %{_builddir}/%{name}-%{version}/trojan-server.service %{buildroot}%{_sysconfdir}/systemd/system
 
 %post
-/usr/sbin/groupadd trojan
-/usr/sbin/useradd -g trojan trojan
 
 %postun
-/usr/sbin/userdel -r trojan
-/usr/sbin/groupdel trojan
 
 %clean
 rm -rf %{buildroot}
 
 %files
-%{_bindir}/trojan-server
-%{_sysconfdir}/trojan-server/sspanel.json
-%{_unitdir}/trojan-server.service
+%attr(0755, root, root) %{_bindir}/trojan-server
+%attr(0755, root, root) %{_sysconfdir}/trojan-server
+%attr(0644, root, root) %{_sysconfdir}/trojan-server/sspanel.json
+%attr(0644, root, root) %{_sysconfdir}/systemd/system/trojan-server.service
 
 %changelog
 * Sun Jul 24 2022 SSPanel-UIM Team <package@sspanel.org> - 0.0.1-1
