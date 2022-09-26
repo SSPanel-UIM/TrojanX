@@ -4,16 +4,15 @@
 //
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
-use std::future::Future;
+use std::future::{poll_fn, Future};
 use std::io;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{ready, Context, Poll};
 
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpStream, UdpSocket};
 
-use crate::proto::{Command, UdpPacketBuf, UdpPacketRef, Address, AddressRef};
-use crate::utils::{poll_fn, ready};
+use crate::proto::{Address, AddressRef, Command, UdpPacketBuf, UdpPacketRef};
 
 mod context;
 pub use context::*;
@@ -28,7 +27,11 @@ where
     C: TrafficControl + Unpin,
 {
     /// Init a session without performing any IO
-    pub async fn new(cmd: Command, addr: &AddressRef<'_>, ctrl: C) -> io::Result<ServerRelaySession<C>> {
+    pub async fn new(
+        cmd: Command,
+        addr: &AddressRef<'_>,
+        ctrl: C,
+    ) -> io::Result<ServerRelaySession<C>> {
         match cmd {
             Command::Connect => {
                 let session = TcpSession::new_accept(addr, ctrl).await?;
@@ -63,10 +66,7 @@ where
 {
     pub async fn new_accept(addr: &AddressRef<'_>, ctrl: C) -> io::Result<TcpSession<C>> {
         let socket = addr.open_tcp().await?;
-        Ok(TcpSession {
-            ctrl,
-            socket,
-        })
+        Ok(TcpSession { ctrl, socket })
     }
 
     pub async fn run<S>(mut self, stream: S, payload: &[u8]) -> io::Result<()>
@@ -133,7 +133,8 @@ where
             socket: self.socket,
             dest: self.dest,
             stream,
-        }.await
+        }
+        .await
     }
 }
 

@@ -7,13 +7,13 @@
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{ready, Context, Poll};
 
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 
-use crate::utils::{ProxyProtocolV2, ready};
+use crate::utils::ProxyProtocolV2;
 
 /// Fallback Policy
 #[derive(Debug, serde::Deserialize)]
@@ -37,11 +37,7 @@ impl Default for Fallback {
 }
 
 impl Fallback {
-    pub async fn fallback<S>(
-        &self,
-        stream: &mut S,
-        data: &[u8],
-    ) -> io::Result<()>
+    pub async fn fallback<S>(&self, stream: &mut S, data: &[u8]) -> io::Result<()>
     where
         S: AsyncRead + AsyncWrite + ConnectionInfo + Unpin,
     {
