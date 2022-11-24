@@ -92,11 +92,14 @@ impl Client {
                 Some(u) => {
                     if user != u {
                         // reload user changed
+
                         if let Some(ctx) = users.get(&user.pwd) {
+                            // user ctx changed
                             user.update_ctx(ctx);
-                        } else {
-                            let (p, u) = user.as_server_user();
-                            users.insert(p, u);
+                        } else if let Some(ctx) = users.remove(&u.pwd) {
+                            // user pwd changed: remove, update ctx, re-insert
+                            user.update_ctx(&ctx);
+                            users.insert(user.pwd, ctx);
                         }
                     }
                 }
