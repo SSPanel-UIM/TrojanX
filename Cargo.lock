@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "trojan-x"
-version = "0.0.1"
+version = "0.0.3"
 dependencies = [
  "form_urlencoded",
  "libc",

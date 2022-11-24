@@ -36,3 +36,9 @@ rm -rf %{buildroot}
 %changelog
 * Sun Jul 24 2022 SSPanel-UIM Team <package@sspanel.org> - 0.0.1-1
  - First release of TrojanX.
+
+* Sun Aug 30 2022 SSPanel-UIM Team <package@sspanel.org> - 0.0.2-1
+ - Bugfixes & Performance improvement.
+
+* Sun Nov 24 2022 SSPanel-UIM Team <package@sspanel.org> - 0.0.3-1
+ - Bugfixes & Performance improvement.
