@@ -41,13 +41,3 @@ jobs:
 
       - name: Tests
         run: cargo test --all-features
-
-      - name: Build
-        shell: bash
-        run: |
-          if [[ "${{ matrix.host_os }}" == "ubuntu-latest" ]]; then
-            sudo .github/workflows/install-cross.sh
-            cross build --target ${{ matrix.target }}
-          else
-            cargo build --target ${{ matrix.target }}
-          fi
