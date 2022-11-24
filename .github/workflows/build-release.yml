@@ -45,7 +45,6 @@ jobs:
             sudo .github/workflows/install-cross.sh
           fi
           if [[ "${{ matrix.host_os }}" == "macos-latest" ]]; then
-            sudo xcode-select -s /Applications/Xcode_12.4.app
             sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*
           fi
 
