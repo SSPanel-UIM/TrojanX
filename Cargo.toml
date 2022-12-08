@@ -1,6 +1,6 @@
 [package]
 name = "trojan-x"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 license = "MPL-2.0"
 authors = ["Irohaede <irohaede@proton.me>"]
