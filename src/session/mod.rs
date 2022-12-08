@@ -5,7 +5,7 @@
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
 use std::future::poll_fn;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr};
 use std::{io, mem, vec};
 
 use bytes::Bytes;
@@ -14,7 +14,7 @@ use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 
-use crate::proto::{Address, AddressRef, Command, UdpPacket, UdpPacketBuf};
+use crate::proto::{Address, Command, UdpPacket, UdpPacketBuf};
 
 mod context;
 pub use context::*;
@@ -98,13 +98,17 @@ where
         buf.write(ctx.payload());
         buf.process_new_packet()?;
 
-        let dest = ctx.address().clone();
         #[cfg(any(target_os = "linux"))]
         let bind = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
         #[cfg(any(not(target_os = "linux")))]
-        let bind = match dest.as_ref() {
-            AddressRef::IP(SocketAddr::V6(_)) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
-            _ => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        let bind = {
+            use std::net::{SocketAddr, Ipv4Addr};
+            use crate::proto::AddressRef;
+
+            match ctx.address().as_ref() {
+                AddressRef::IP(SocketAddr::V6(_)) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+                _ => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            }
         };
         let socket = UdpSocket::bind((bind, 0)).await?;
 
