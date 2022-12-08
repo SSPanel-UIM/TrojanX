@@ -72,7 +72,7 @@
 //!
 //! # Protocol Details
 //!
-//! See [`RequestRef`] and [`UdpPacketRef`].
+//! See [`Request`] and [`UdpPacket`].
 
 use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -82,6 +82,7 @@ mod addr;
 mod udp_packet;
 
 pub use addr::*;
+use bytes::Bytes;
 pub use udp_packet::*;
 
 pub(self) const CRLF: &[u8] = b"\r\n";
@@ -233,14 +234,14 @@ impl Display for Command {
 /// | [`Password`] |   CRLF    | [`Command`] | [`Address`] |   CRLF    | Payload  |
 /// | ------------ | --------- | ----------- | ----------- | --------- | -------- |
 /// |      56      | `b"\r\n"` |      1      |  Variable   | `b"\r\n"` | Variable |
-pub struct RequestRef<'a> {
+pub struct Request {
     pub pwd: Password,
     pub cmd: Command,
-    pub addr: AddressRef<'a>,
-    pub payload: &'a [u8],
+    pub addr: Address,
+    pub payload: Bytes,
 }
 
-impl<'a> RequestRef<'a> {
+impl Request {
     /// Parse Trojan Request.
     ///
     /// # Errors
@@ -251,7 +252,7 @@ impl<'a> RequestRef<'a> {
     /// - `b"\r\n"` is not present as expectaion
     /// - The length of `bytes` less than expectaion
     #[inline]
-    pub fn from_bytes(bytes: &'a [u8]) -> Result<Self, ProtocolError> {
+    pub fn from_bytes(bytes: Bytes) -> Result<Self, ProtocolError> {
         let (pwd, cmd) = {
             let slice = bytes.get(..59).ok_or(ProtocolError)?;
             // SAFETY: The length of slice is 59 which > 56.
@@ -262,7 +263,7 @@ impl<'a> RequestRef<'a> {
             let cmd = Command::from_byte(slice[58])?;
             (pwd, cmd)
         };
-        let addr = AddressRef::from_bytes(&bytes[59..])?;
+        let addr = Address::from_bytes(bytes.slice(59..))?;
 
         let payload = {
             let offset = 59 + addr.size() + 2;
@@ -270,10 +271,10 @@ impl<'a> RequestRef<'a> {
             if slice != CRLF {
                 return Err(ProtocolError);
             }
-            &bytes[offset..]
+            bytes.slice(offset..)
         };
 
-        Ok(RequestRef {
+        Ok(Request {
             pwd,
             cmd,
             addr,
@@ -290,7 +291,7 @@ impl<'a> RequestRef<'a> {
         buf.push(self.cmd as u8);
         self.addr.extend_bytes(&mut buf);
         buf.extend(CRLF);
-        buf.extend(self.payload);
+        buf.extend(&self.payload);
         buf
     }
 }

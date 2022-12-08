@@ -14,13 +14,14 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use bytes::Bytes;
 use tokio::net::TcpStream;
 use tokio::time::{self, Instant, Sleep};
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::server::TlsStream;
 
-use crate::proto::Password;
-use crate::session::{Fallback, TrafficControl};
+use crate::proto::{Password, Request, Command, Address};
+use crate::session::{Fallback, ServerSession};
 use crate::sspanel::client::{IpData, UpdateData, UserRaw};
 use crate::utils::limiter::Limiter;
 use crate::utils::RawHasherBuilder;
@@ -34,10 +35,11 @@ pub struct UserContext {
 }
 
 impl UserContext {
-    pub fn into_session(self: Arc<Self>) -> UserSessionContext {
+    pub fn into_session(self: Arc<Self>, req: Request) -> UserSessionContext {
         UserSessionContext {
             tx: 0,
             rx: 0,
+            req,
             start: Instant::now(),
             inner: self,
             sleep: Box::pin(time::sleep(Duration::ZERO)),
@@ -185,6 +187,7 @@ pub struct UserSessionContext {
     pub tx: u64,
     pub rx: u64,
     pub start: Instant,
+    pub req: Request,
     inner: Arc<UserContext>,
     sleep: Pin<Box<Sleep>>,
 }
@@ -194,6 +197,19 @@ impl UserSessionContext {
         self.inner.id
     }
 
+    pub fn cmd(&self) -> Command {
+        self.req.cmd
+    }
+
+    pub fn addr(&self) -> &Address {
+        &self.req.addr
+    }
+
+    pub fn payload(&self) -> &Bytes {
+        &self.req.payload
+    }
+
+    #[inline]
     fn consume_limiter(&mut self, bytes: usize) {
         let dur = self.inner.limiter.consume(bytes);
         if !dur.is_zero() {
@@ -208,19 +224,37 @@ impl UserSessionContext {
     }
 }
 
-impl TrafficControl for UserSessionContext {
+impl ServerSession for UserSessionContext {
+    #[inline]
+    fn cmd(&self) -> Command {
+        self.req.cmd        
+    }
+
+    #[inline]
+    fn address(&self) -> &Address {
+        &self.req.addr
+    }
+
+    #[inline]
+    fn payload(&self) -> &Bytes {
+        &self.req.payload
+    }
+
+    #[inline]
     fn consume_tx(&mut self, bytes: usize) {
         self.inner.tx.fetch_add(bytes as u64, Ordering::Relaxed);
         self.tx += bytes as u64;
         self.consume_limiter(bytes);
     }
 
+    #[inline]
     fn consume_rx(&mut self, bytes: usize) {
         self.inner.rx.fetch_add(bytes as u64, Ordering::Relaxed);
         self.rx += bytes as u64;
         self.consume_limiter(bytes);
     }
 
+    #[inline]
     fn poll_pause(&mut self, cx: &mut Context<'_>) -> Poll<()> {
         self.sleep.as_mut().poll(cx)
     }

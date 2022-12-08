@@ -4,10 +4,11 @@
 //
 // Copyright (c) 2022 irohaede <irohaede@proton.me>
 
-use std::mem;
-use std::ptr;
+use std::{ptr, mem};
 
-use super::{AddressRef, AssembleError, ProtocolError, CRLF};
+use bytes::Bytes;
+
+use super::{Address, AssembleError, ProtocolError, CRLF};
 
 /// UDP Packet
 ///
@@ -15,25 +16,25 @@ use super::{AddressRef, AssembleError, ProtocolError, CRLF};
 ///
 /// # Protocol
 ///
-/// | [`AddressRef`] | Length |  CRLF   | Payload  |
+/// |  [`Address`]   | Length |  CRLF   | Payload  |
 /// | -------------- | ------ | ------- | -------- |
 /// |    Variable    |   2    | b"\r\n" | Variable |
-pub struct UdpPacketRef<'a> {
-    pub addr: AddressRef<'a>,
-    pub payload: &'a [u8],
+pub struct UdpPacket {
+    pub addr: Address,
+    pub payload: Bytes,
 }
 
-impl UdpPacketRef<'_> {
+impl UdpPacket {
     /// Build a UdpPacket.
     #[inline]
-    pub fn new<'a>(addr: AddressRef<'a>, payload: &'a [u8]) -> UdpPacketRef<'a> {
-        UdpPacketRef { addr, payload }
+    pub fn new(addr: Address, payload: Bytes) -> UdpPacket {
+        UdpPacket { addr, payload }
     }
 
     /// Parse UDP Packet from bytes.
     #[inline]
-    pub fn from_bytes(bytes: &[u8]) -> Result<UdpPacketRef<'_>, AssembleError> {
-        let addr = AddressRef::from_assemble_bytes(bytes)?;
+    pub fn from_bytes(bytes: Bytes) -> Result<UdpPacket, AssembleError> {
+        let addr = Address::from_assemble_bytes(bytes.clone())?;
 
         let addr_len = addr.size();
         let len = {
@@ -51,10 +52,10 @@ impl UdpPacketRef<'_> {
             if &slice[0..2] != CRLF {
                 return Err(AssembleError::Protocol);
             }
-            &slice[2..]
+            bytes.slice_ref(&slice[2..])
         };
 
-        Ok(UdpPacketRef { addr, payload })
+        Ok(UdpPacket { addr, payload })
     }
 
     /// Build UdpPacket to bytes.
@@ -66,7 +67,7 @@ impl UdpPacketRef<'_> {
         let len = self.payload.len() as u16;
         buf.extend(len.to_be_bytes());
         buf.extend_from_slice(CRLF);
-        buf.extend(self.payload);
+        buf.extend(&self.payload);
         buf
     }
 
@@ -86,7 +87,7 @@ pub struct UdpPacketBuf {
     buf: Vec<u8>,
 
     /// self reference to buf
-    packet: Option<UdpPacketRef<'static>>,
+    packet: Option<UdpPacket>,
 }
 
 impl UdpPacketBuf {
@@ -100,7 +101,7 @@ impl UdpPacketBuf {
 
     /// Try to read current avalaible packet
     #[inline]
-    pub fn read(&self) -> Option<&UdpPacketRef<'_>> {
+    pub fn read(&self) -> Option<&UdpPacket> {
         self.packet.as_ref()
     }
 
@@ -121,11 +122,11 @@ impl UdpPacketBuf {
                 self.buf.set_len(remain);
             }
         }
-        match UdpPacketRef::from_bytes(&self.buf) {
+
+        // unsafe: check
+        match UdpPacket::from_bytes(Bytes::from_static(unsafe { mem::transmute(&self.buf[..]) })) {
             Ok(p) => {
-                // transmute to 'static to store in current struct
-                // SAFETY: Managed by Self, could only be immutable borrowed.
-                self.packet = Some(unsafe { mem::transmute(p) });
+                self.packet = Some(p);
                 Ok(())
             }
             Err(AssembleError::NotReady) => Ok(()),

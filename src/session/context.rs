@@ -9,10 +9,12 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
 
+use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 
+use crate::proto::{Command, Address};
 use crate::utils::ProxyProtocolV2;
 
 /// Fallback Policy
@@ -70,7 +72,13 @@ impl Fallback {
     }
 }
 
-pub trait TrafficControl {
+pub trait ServerSession {
+    fn cmd(&self) -> Command;
+
+    fn address(&self) -> &Address;
+
+    fn payload(&self) -> &Bytes;
+
     /// Add tx(transmission) bytes number, change self status.
     fn consume_tx(&mut self, bytes: usize);
 
@@ -81,10 +89,22 @@ pub trait TrafficControl {
     fn poll_pause(&mut self, cx: &mut Context<'_>) -> Poll<()>;
 }
 
-impl<T> TrafficControl for &mut T
+impl<T> ServerSession for &mut T
 where
-    T: TrafficControl,
+    T: ServerSession,
 {
+    fn cmd(&self) -> Command {
+        (**self).cmd()
+    }
+
+    fn address(&self) -> &Address {
+        (**self).address()
+    }
+
+    fn payload(&self) -> &Bytes {
+        (**self).payload()
+    }
+
     fn consume_rx(&mut self, bytes: usize) {
         (*self).consume_rx(bytes)
     }
@@ -100,23 +120,23 @@ where
 
 pub struct StreamWrapper<IO, C> {
     stream: IO,
-    ctrl: C,
+    pub ctx: C,
 }
 
 impl<IO, C> StreamWrapper<IO, C>
 where
     IO: AsyncRead + AsyncWrite + Unpin,
-    C: TrafficControl + Unpin,
+    C: ServerSession + Unpin,
 {
     pub fn new(stream: IO, ctrl: C) -> Self {
-        Self { stream, ctrl }
+        Self { stream, ctx: ctrl }
     }
 }
 
 impl<IO, C> AsyncWrite for StreamWrapper<IO, C>
 where
     IO: AsyncRead + AsyncWrite + Unpin,
-    C: TrafficControl + Unpin,
+    C: ServerSession + Unpin,
 {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -124,10 +144,10 @@ where
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
         let this = self.get_mut();
-        ready!(this.ctrl.poll_pause(cx));
+        ready!(this.ctx.poll_pause(cx));
         let ret = Pin::new(&mut this.stream).poll_write(cx, buf);
         if let Poll::Ready(Ok(n)) = ret {
-            this.ctrl.consume_rx(n);
+            this.ctx.consume_rx(n);
         }
         ret
     }
@@ -153,10 +173,10 @@ where
         bufs: &[io::IoSlice<'_>],
     ) -> Poll<Result<usize, io::Error>> {
         let this = self.get_mut();
-        ready!(this.ctrl.poll_pause(cx));
+        ready!(this.ctx.poll_pause(cx));
         let ret = Pin::new(&mut this.stream).poll_write_vectored(cx, bufs);
         if let Poll::Ready(Ok(n)) = ret {
-            this.ctrl.consume_rx(n);
+            this.ctx.consume_rx(n);
         }
         ret
     }
@@ -165,7 +185,7 @@ where
 impl<IO, C> AsyncRead for StreamWrapper<IO, C>
 where
     IO: AsyncRead + AsyncWrite + Unpin,
-    C: TrafficControl + Unpin,
+    C: ServerSession + Unpin,
 {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -173,10 +193,10 @@ where
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         let this = self.get_mut();
-        ready!(this.ctrl.poll_pause(cx));
+        ready!(this.ctx.poll_pause(cx));
         let ret = Pin::new(&mut this.stream).poll_read(cx, buf);
         if let Poll::Ready(Ok(_)) = ret {
-            this.ctrl.consume_tx(buf.filled().len());
+            this.ctx.consume_tx(buf.filled().len());
         }
         ret
     }
