@@ -1,8 +1,8 @@
 name: Build Releases
 on:
-  release:
-    types: [created]
-
+  push:
+    tags:
+      - "*"
 env:
   CARGO_TERM_COLOR: always
 
@@ -43,9 +43,6 @@ jobs:
           rustup target add ${{ matrix.target }}
           if [[ "${{ matrix.host_os }}" == "ubuntu-latest" ]]; then
             sudo .github/workflows/install-cross.sh
-          fi
-          if [[ "${{ matrix.host_os }}" == "macos-latest" ]]; then
-            sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*
           fi
 
       - name: Build

@@ -18,7 +18,7 @@ jobs:
           - aarch64-unknown-linux-gnu     # arch: aarch64
           - armv7-unknown-linux-gnueabihf # arch: armv7
           - x86_64-apple-darwin           # os: darwin
-          - aarch64-apple-darwin           # os: darwin
+          - aarch64-apple-darwin          # os: darwin
           - x86_64-pc-windows-msvc        # os: windows
 
         include:
@@ -38,6 +38,21 @@ jobs:
     runs-on: ${{ matrix.host_os }}
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Prepare
+        shell: bash
+        run: |
+          rustup target add ${{ matrix.target }}
 
       - name: Tests
         run: cargo test --all-features
+      
+      - name: Build
+        shell: bash
+        run: |
+          if [[ "${{ matrix.host_os }}" == "ubuntu-latest" ]]; then
+            sudo .github/workflows/install-cross.sh
+            cross build --target ${{ matrix.target }}
+          else
+            cargo build --target ${{ matrix.target }}
+          fi
