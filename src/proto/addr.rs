@@ -187,7 +187,7 @@ impl Display for Address {
             AddressInner::Name((n, p)) => {
                 // SAFETY: bytes is validated utf8 when building
                 let n = unsafe { std::str::from_utf8_unchecked(n) };
-                write!(f, "{}:{}", n, p)
+                write!(f, "{n}:{p}")
             }
         }
     }
