@@ -102,8 +102,8 @@ where
         let bind = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
         #[cfg(any(not(target_os = "linux")))]
         let bind = {
-            use std::net::{SocketAddr, Ipv4Addr};
             use crate::proto::AddressRef;
+            use std::net::{Ipv4Addr, SocketAddr};
 
             match ctx.address().as_ref() {
                 AddressRef::IP(SocketAddr::V6(_)) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
@@ -127,26 +127,35 @@ where
         let (r2c_tx, mut r2c_rx) = mpsc::channel::<Vec<u8>>(16);
         let (c2r_tx, mut c2r_rx) = mpsc::channel::<(Address, Vec<u8>)>(16);
 
-        let task = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut buf = vec![0; PAYLOAD_LEN];
             loop {
                 tokio::select! {
                     x = self.socket.recv_from(&mut buf) => {
-                        if let Ok((n, addr)) = x {
-                            let bytes = UdpPacket::new(
-                                addr.into(),
-                                // SAFETY: wrap with Bytes without copy, no Bytes::clone() occur
-                                Bytes::from_static(unsafe { mem::transmute(&buf[..n]) }),
-                            )
-                            .as_bytes();
-                            if let Err(TrySendError::Closed(_)) = r2c_tx.try_send(bytes) {
-                                break
+                        match x {
+                            Ok((n, addr)) => {
+                                let bytes = UdpPacket::new(
+                                    addr.into(),
+                                    // SAFETY: wrap with Bytes without copy, no Bytes::clone() occur
+                                    Bytes::from_static(unsafe { mem::transmute(&buf[..n]) }),
+                                )
+                                .as_bytes();
+                                if let Err(TrySendError::Closed(_)) = r2c_tx.try_send(bytes) {
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                log::error!("udp socket recv error: {}", e);
+                                break;
                             }
                         }
                     }
                     x = c2r_rx.recv() => {
                         if let Some((addr, payload)) = x {
                             let _ = addr.send_udp(&self.socket, &payload).await;
+                        } else {
+                            // stream side is closed
+                            break;
                         }
                     }
                 };
@@ -156,7 +165,6 @@ where
         let mut buf = vec![0; 2048];
         loop {
             tokio::select! {
-                x = poll_fn(|cx| self.ctx.poll_pause(cx)) => x,
                 x = stream.read(&mut buf) => {
                     let n = x?;
                     if n == 0 {
@@ -178,11 +186,15 @@ where
                     if let Some(bytes) = x {
                         stream.write_all(&bytes).await?;
                         self.ctx.consume_rx(bytes.len());
+                    } else {
+                        // udp socket side is closed
+                        break;
                     }
                 }
             }
+            poll_fn(|cx| self.ctx.poll_pause(cx)).await;
         }
-        task.abort();
+
         Ok(())
     }
 }
