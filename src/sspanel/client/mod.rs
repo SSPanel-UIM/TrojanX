@@ -33,7 +33,7 @@ pub struct Client {
 impl Client {
     #[inline]
     pub fn new(server: Arc<ServerContext>) -> Self {
-        let inner = reqwest::ClientBuilder::new().user_agent("trojan/0.0.3")
+        let inner = reqwest::ClientBuilder::new().user_agent("TrojanX/0.0.5")
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(10))
             .build()
@@ -63,10 +63,6 @@ impl Client {
             }
             if let Err(e) = self.upload_ip().await {
                 log::error!("failed to upload user ip: {}", e);
-            }
-            #[cfg(any(target_os = "linux"))]
-            if let Err(e) = self.server_stat().await {
-                log::error!("failed to upload server stat: {}", e);
             }
         }
     }
@@ -150,26 +146,6 @@ impl Client {
         } else {
             log::error!("failed to upload ip: error #{}", res.status);
         }
-        Ok(())
-    }
-
-    #[cfg(any(target_os = "linux"))]
-    pub async fn server_stat(&self) -> Result<(), reqwest::Error> {
-        #[derive(serde::Serialize)]
-        struct Data {
-            uptime: isize,
-            load: f32
-        }
-        let url = self.build_url(format!("/nodes/{}/info", self.id));
-
-        let (load, uptime) = unsafe {
-            let mut info = std::mem::MaybeUninit::uninit();
-            libc::sysinfo(info.as_mut_ptr());
-            let info = info.assume_init();
-            (info.loads[0] as f32 / (1 << libc::SI_LOAD_SHIFT) as f32, info.uptime as isize)
-        };
-
-        self.inner.post(url).json(&Data { uptime, load }).send().await?;
         Ok(())
     }
 

@@ -28,7 +28,7 @@ pub struct UserRaw {
     pub pwd: Password,
     #[serde(rename = "node_speedlimit")]
     pub speed_limit: f64,
-    #[serde(rename = "node_connector")]
+    #[serde(rename = "node_iplimit")]
     pub ip_limit: usize,
     #[serde(default, rename = "alive_ip", deserialize_with = "ip_online_fallback")]
     pub ip_online: usize,
