@@ -40,7 +40,3 @@ See wiki.
 ## License
 
 [Mozilla Public License Version 2.0](https://mozilla.org/MPL/2.0/)
-
-## Credit
-
-Mainterner: [@Irohaede](https://github.com/Irohaede)

@@ -21,7 +21,7 @@ fn main() {
 
     log::set_max_level(LevelFilter::Info);
 
-    log::info!("TrojanX for SSPanel-Uim. v0.0.5. license under MPL-2.0.");
+    log::info!("TrojanX for SSPanel-UIM. v0.0.5. license under MPL-2.0.");
 
     let path = match std::env::args().nth(1) {
         Some(p) => p,

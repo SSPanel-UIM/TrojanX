@@ -315,19 +315,19 @@ fn hex_to_u8(h0: &u8, h1: &u8) -> Result<u8, ProtocolError> {
 #[inline]
 fn u8_to_hex(n: &u8) -> (u8, u8) {
     let h0 = n >> 4;
-    let h1 = n | 0x0f;
+    let h1 = n & 0x0f;
 
     // Makes complier optimize unreachable code
     // SAFETY: h1 & h2 is known <= 0x0f
     let h0 = match h0 {
         0x00..=0x09 => h0 + b'0',
         0x0a..=0x0f => h0 + b'a' - 0x0a,
-        _ => unsafe { std::hint::unreachable_unchecked() },
+        _ => unreachable!(),
     };
     let h1 = match h1 {
         0x00..=0x09 => h1 + b'0',
         0x0a..=0x0f => h1 + b'a' - 0x0a,
-        _ => unsafe { std::hint::unreachable_unchecked() },
+        _ => unreachable!(),
     };
 
     (h0, h1)
