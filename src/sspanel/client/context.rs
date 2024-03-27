@@ -1,9 +1,3 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2022 irohaede <irohaede@proton.me>
-
 use std::net::IpAddr;
 
 use serde::{Deserialize, Deserializer, Serialize};
@@ -11,7 +5,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::proto::Password;
 
 pub type UserFetchResponse = Response<Vec<UserRaw>>;
-
 pub type UpdateResponse = Response<String>;
 
 #[derive(Deserialize)]

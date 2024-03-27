@@ -1,14 +1,9 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2022 irohaede <irohaede@proton.me>
-
 use std::future::poll_fn;
 use std::net::{IpAddr, Ipv6Addr};
 use std::{io, mem, vec};
 
 use bytes::Bytes;
+
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::mpsc;

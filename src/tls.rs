@@ -1,9 +1,3 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-// 
-// Copyright (c) 2022 irohaede <irohaede@proton.me>
-
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufReader};
@@ -14,6 +8,7 @@ use tokio_rustls::rustls::server::{
     ClientHello, NoServerSessionStorage, ResolvesServerCert, ResolvesServerCertUsingSni,
     ServerSessionMemoryCache,
 };
+
 use tokio_rustls::rustls::sign::{any_supported_type, CertifiedKey};
 use tokio_rustls::rustls::{Certificate, PrivateKey, ServerConfig};
 
@@ -24,7 +19,6 @@ pub struct TlsConfig {
     servers: HashMap<String, Server>,
     #[serde(default)]
     prefer_server_cipher: bool,
-
     #[serde(default)]
     max_early_data: u32,
     #[serde(default)]
@@ -38,7 +32,6 @@ pub struct TlsConfig {
 impl TlsConfig {
     pub fn build_server(self) -> io::Result<Arc<ServerConfig>> {
         let cert_resolver = Arc::new(CertResolver::new(self.servers)?);
-
         let mut ctx = ServerConfig::builder()
             .with_safe_defaults()
             .with_no_client_auth()
@@ -63,15 +56,18 @@ impl TlsConfig {
         use tokio_rustls::rustls::RootCertStore;
 
         let mut root_certs = RootCertStore::empty();
+        
         for cert in rustls_native_certs::load_native_certs()? {
             root_certs
                 .add(&tokio_rustls::rustls::Certificate(cert.0))
                 .unwrap();
         }
+
         let mut ctx = tokio_rustls::rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(root_certs)
             .with_no_client_auth();
+        
         ctx.alpn_protocols = self.alpn.into_iter().map(String::into_bytes).collect();
         ctx.max_fragment_size = self.max_fragment_size;
         ctx.enable_early_data = self.max_early_data > 0;

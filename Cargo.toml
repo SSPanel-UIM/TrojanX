@@ -3,7 +3,7 @@ name = "trojan-x"
 version = "0.0.5"
 edition = "2021"
 license = "MPL-2.0"
-authors = ["Irohaede <irohaede@proton.me>"]
+authors = ["SSPanel-UIM Team <package@sspanel.org>"]
 
 [dependencies]
 bytes = "1.5"

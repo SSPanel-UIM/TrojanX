@@ -1,9 +1,3 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2022 irohaede <irohaede@proton.me>
-
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::io;
@@ -15,6 +9,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::Bytes;
+
 use tokio::net::TcpStream;
 use tokio::time::{self, Instant, Sleep};
 use tokio_rustls::rustls::ServerConfig;
