@@ -19,7 +19,7 @@ rustls-pemfile = "1.0"
 # optional
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls-native-roots"], optional = true }
 form_urlencoded = { version = "1.2", optional = true }
-rustls-native-certs = { version = "0.6", optional =  true }
+rustls-native-certs = { version = "0.7", optional =  true }
 
 [target.'cfg(any(target_os = "linux"))'.dependencies]
 libc = { version = "0.2", optional = true }
